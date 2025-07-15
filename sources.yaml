@@ -1,0 +1,17 @@
+ZscalerHubIPAddresses:
+    zscaler.net: https://config.zscaler.com/api/zscaler.net/hubs/cidr/json/recommended
+    zscalerone.net: https://config.zscaler.com/api/zscalerone.net/hubs/cidr/json/recommended
+    zscalertwo.net: https://config.zscaler.com/api/zscalertwo.net/hubs/cidr/json/recommended
+    zscalerthree.net: https://config.zscaler.com/api/zscalerthree.net/hubs/cidr/json/recommended
+    zscloud.net: https://config.zscloud.net/hubs/cidr/json/recommended
+    zscalerbeta.net: https://config.zscalerbeta.net/hubs/cidr/json/recommended
+
+CloudEnforcementNodeRanges:
+    zscaler.net: https://config.zscaler.com/api/zscaler.net/future/json
+    zscalerone.net: https://config.zscaler.com/api/zscalerone.net/future/json
+    zscalertwo.net: https://config.zscalertwo.net/future/json
+    zscalerthree.net: https://config.zscalerthree.net/future/json
+    zscloud.net: https://config.zscloud.net/future/json
+    zscalerbeta.net: https://config.zscalerbeta.net/future/json
+
+ZPAAllowList: https://config.zscaler.com/api/private.zscaler.com/zpa/json
