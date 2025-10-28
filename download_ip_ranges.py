@@ -34,6 +34,9 @@ def parse_zscaler_hub_ips(data):
         for ip in data["hubPrefixes"]:
             # Filter out IPv6 addresses
             if ":" not in ip:
+                # Add /32 for single IPs without CIDR notation
+                if "/" not in ip:
+                    ip += "/32"
                 ips.append(ip)
     return ips
 
@@ -45,6 +48,9 @@ def parse_cloud_enforcement_nodes(data):
         for ip in data["prefixes"]:
             # Filter out IPv6 addresses
             if ":" not in ip:
+                # Add /32 for single IPs without CIDR notation
+                if "/" not in ip:
+                    ip += "/32"
                 ips.append(ip)
     return ips
 
@@ -58,7 +64,24 @@ def parse_zpa_allowlist(data):
                 for ip in item["IPs"]:
                     # Filter out IPv6 addresses
                     if ":" not in ip:
+                        # Add /32 for single IPs without CIDR notation
+                        if "/" not in ip:
+                            ip += "/32"
                         ips.append(ip)
+    return ips
+
+
+def parse_zia_svpn(data):
+    """Parse ZIA Application Connector Tunnel (SVPN) format JSON."""
+    ips = []
+    if data and "svpnIPs" in data:
+        for ip in data["svpnIPs"]:
+            # Filter out IPv6 addresses
+            if ":" not in ip:
+                # Add /32 for single IPs without CIDR notation
+                if "/" not in ip:
+                    ip += "/32"
+                ips.append(ip)
     return ips
 
 
@@ -138,21 +161,49 @@ def consolidate_networks(ip_list):
     return consolidated
 
 
-def select_domain(sources):
-    """Present domain selection menu to user."""
+def select_service_type():
+    """Ask user which services to include."""
+    print("\nWhat do you want to download?")
+    print("1. ZIA only (Zscaler Internet Access)")
+    print("2. ZIA + ZPA (Zscaler Internet Access + Private Access)")
+
+    while True:
+        try:
+            choice = input("\nEnter number (1-2): ")
+            if choice in ["1", "2"]:
+                return choice == "2"  # Returns True if ZPA is included
+            else:
+                print("Invalid choice. Please try again.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+
+
+def select_domain(sources, service_type):
+    """Present domain selection menu to user.
+
+    Args:
+        sources: Sources dictionary from YAML
+        service_type: 'zia' or 'zpa'
+    """
     domains = set()
-    
-    # Collect all unique domains
-    for source_type in ["ZscalerHubIPAddresses", "CloudEnforcementNodeRanges"]:
-        if source_type in sources:
-            domains.update(sources[source_type].keys())
-    
+
+    if service_type == 'zia':
+        # Collect ZIA domains
+        for source_type in ["ZscalerHubIPAddresses", "CloudEnforcementNodeRanges", "ZIAApplicationConnectorTunnel"]:
+            if source_type in sources:
+                domains.update(sources[source_type].keys())
+        print("\nSelect ZIA cloud:")
+    else:  # zpa
+        # Collect ZPA domains
+        if "ZPAAllowList" in sources:
+            domains.update(sources["ZPAAllowList"].keys())
+        print("\nSelect ZPA cloud:")
+
     domains = sorted(list(domains))
-    
-    print("\nSelect Zscaler domain:")
+
     for i, domain in enumerate(domains, 1):
         print(f"{i}. {domain}")
-    
+
     while True:
         try:
             choice = input("\nEnter number (1-{}): ".format(len(domains)))
@@ -170,61 +221,107 @@ def main():
         description="Download and consolidate Zscaler IP ranges"
     )
     parser.add_argument(
-        "--domain",
-        help="Zscaler domain (e.g., zscaler.net). If not specified, will prompt."
+        "--zia-domain",
+        help="ZIA domain (e.g., zscaler.net). If not specified, will prompt."
+    )
+    parser.add_argument(
+        "--zpa-domain",
+        help="ZPA domain (e.g., private.zscaler.com). If not specified and ZPA is included, will prompt."
+    )
+    parser.add_argument(
+        "--include-zpa",
+        action="store_true",
+        help="Include ZPA IP ranges"
     )
     parser.add_argument(
         "--output",
-        default="zpa_bc_subnet_consolidate.txt",
-        help="Output file name (default: zpa_bc_subnet_consolidate.txt)"
+        help="Output file name (default: auto-generated based on domain and date)"
     )
-    
+
     args = parser.parse_args()
-    
+
     # Load sources
     print("Loading sources from sources.yaml...")
     sources = load_sources()
-    
-    # Select domain
-    if args.domain:
-        domain = args.domain
+
+    # Determine if ZPA should be included
+    if args.zia_domain or args.zpa_domain or args.include_zpa:
+        # Command line mode
+        include_zpa = args.include_zpa or args.zpa_domain is not None
+        zia_domain = args.zia_domain
+        zpa_domain = args.zpa_domain
+
+        if not zia_domain:
+            zia_domain = select_domain(sources, 'zia')
+
+        if include_zpa and not zpa_domain:
+            zpa_domain = select_domain(sources, 'zpa')
     else:
-        domain = select_domain(sources)
-    
-    print(f"\nUsing domain: {domain}")
+        # Interactive mode
+        include_zpa = select_service_type()
+        zia_domain = select_domain(sources, 'zia')
+        zpa_domain = select_domain(sources, 'zpa') if include_zpa else None
+
+    print(f"\nUsing ZIA cloud: {zia_domain}")
+    if include_zpa:
+        print(f"Using ZPA cloud: {zpa_domain}")
+
+    # Generate default output filename if not specified
+    if args.output:
+        output_file = args.output
+    else:
+        today = datetime.now().strftime('%Y-%m-%d')
+        # Remove .net/.com from domain for cleaner filename
+        zia_clean = zia_domain.replace('.net', '').replace('.com', '')
+        if include_zpa:
+            zpa_clean = zpa_domain.replace('.net', '').replace('.com', '').replace('private.zscaler', 'private-zscaler')
+            output_file = f"{today}_{zia_clean}_{zpa_clean}_subnet_consolidate.txt"
+        else:
+            output_file = f"{today}_{zia_clean}_subnet_consolidate.txt"
     
     all_ips = []
-    
+
+    # Download ZIA sources
     # Download ZscalerHubIPAddresses
-    if "ZscalerHubIPAddresses" in sources and domain in sources["ZscalerHubIPAddresses"]:
-        url = sources["ZscalerHubIPAddresses"][domain]
+    if "ZscalerHubIPAddresses" in sources and zia_domain in sources["ZscalerHubIPAddresses"]:
+        url = sources["ZscalerHubIPAddresses"][zia_domain]
         print(f"\nDownloading ZscalerHubIPAddresses from {url}...")
         data = download_json(url)
         if data:
             ips = parse_zscaler_hub_ips(data)
             print(f"Found {len(ips)} IP ranges")
             all_ips.extend(ips)
-    
+
     # Download CloudEnforcementNodeRanges
-    if "CloudEnforcementNodeRanges" in sources and domain in sources["CloudEnforcementNodeRanges"]:
-        url = sources["CloudEnforcementNodeRanges"][domain]
+    if "CloudEnforcementNodeRanges" in sources and zia_domain in sources["CloudEnforcementNodeRanges"]:
+        url = sources["CloudEnforcementNodeRanges"][zia_domain]
         print(f"\nDownloading CloudEnforcementNodeRanges from {url}...")
         data = download_json(url)
         if data:
             ips = parse_cloud_enforcement_nodes(data)
             print(f"Found {len(ips)} IP ranges")
             all_ips.extend(ips)
-    
-    # Download ZPAAllowList (domain-independent)
-    if "ZPAAllowList" in sources:
-        url = sources["ZPAAllowList"]
+
+    # Download ZIA Application Connector Tunnel 2.0 IPs
+    if "ZIAApplicationConnectorTunnel" in sources and zia_domain in sources["ZIAApplicationConnectorTunnel"]:
+        url = sources["ZIAApplicationConnectorTunnel"][zia_domain]
+        print(f"\nDownloading ZIA Application Connector Tunnel IPs from {url}...")
+        data = download_json(url)
+        if data:
+            ips = parse_zia_svpn(data)
+            print(f"Found {len(ips)} IP ranges")
+            all_ips.extend(ips)
+
+    # Download ZPA sources (if requested)
+    if include_zpa and "ZPAAllowList" in sources and zpa_domain in sources["ZPAAllowList"]:
+        url = sources["ZPAAllowList"][zpa_domain]
         print(f"\nDownloading ZPAAllowList from {url}...")
         data = download_json(url)
         if data:
             ips = parse_zpa_allowlist(data)
             print(f"Found {len(ips)} IP ranges")
             all_ips.extend(ips)
-    
+
     # Add DigiCert subnets
     print("\nReading DigiCert subnets...")
     digicert_ips = read_digicert_subnets()
@@ -240,13 +337,13 @@ def main():
     print("\nConsolidating overlapping networks...")
     consolidated = consolidate_networks(all_ips)
     print(f"Consolidated to {len(consolidated)} networks")
-    
+
     # Write output
-    with open(args.output, "w") as f:
+    with open(output_file, "w") as f:
         for network in consolidated:
             f.write(f"{network}\n")
-    
-    print(f"\nResults saved to: {args.output}")
+
+    print(f"\nResults saved to: {output_file}")
     print(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 

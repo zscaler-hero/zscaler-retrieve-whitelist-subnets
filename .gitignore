@@ -1,6 +1,5 @@
 # Generated output files
-zpa_bc_subnet_consolidate.txt
-subnet_consolidated.txt
+*consolidate*.txt
 
 # Downloaded JSON files
 *.json

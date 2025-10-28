@@ -9,9 +9,20 @@ ZscalerHubIPAddresses:
 CloudEnforcementNodeRanges:
     zscaler.net: https://config.zscaler.com/api/zscaler.net/future/json
     zscalerone.net: https://config.zscaler.com/api/zscalerone.net/future/json
-    zscalertwo.net: https://config.zscalertwo.net/future/json
-    zscalerthree.net: https://config.zscalerthree.net/future/json
-    zscloud.net: https://config.zscloud.net/future/json
-    zscalerbeta.net: https://config.zscalerbeta.net/future/json
+    zscalertwo.net: https://config.zscaler.com/api/zscalertwo.net/future/json
+    zscalerthree.net: https://config.zscaler.com/api/zscalerthree.net/future/json
+    zscloud.net: https://config.zscaler.com/api/zscloud.net/future/json
+    zscalerbeta.net: https://config.zscaler.com/api/zscalerbeta.net/future/json
 
-ZPAAllowList: https://config.zscaler.com/api/private.zscaler.com/zpa/json
+ZPAAllowList:
+    private.zscaler.com: https://config.zscaler.com/api/private.zscaler.com/zpa/json
+    zpatwo.net: https://config.zscaler.com/api/zpatwo.net/zpa/json
+    zpabeta.net: https://config.zscaler.com/api/zpabeta.net/zpa/json
+
+ZIAApplicationConnectorTunnel:
+    zscaler.net: https://config.zscaler.com/api/zscaler.net/svpn/json
+    zscalerone.net: https://config.zscaler.com/api/zscalerone.net/svpn/json
+    zscalertwo.net: https://config.zscaler.com/api/zscalertwo.net/svpn/json
+    zscalerthree.net: https://config.zscaler.com/api/zscalerthree.net/svpn/json
+    zscloud.net: https://config.zscaler.com/api/zscloud.net/svpn/json
+    zscalerbeta.net: https://config.zscaler.com/api/zscalerbeta.net/svpn/json

@@ -20,6 +20,7 @@ Organizations using Zscaler services need to whitelist specific IP ranges in the
 -   **Zscaler Client Connector (ZCC)**: Requires access to Zscaler service IPs for policy enforcement and cloud security
 -   **Zscaler Private Access (ZPA)**: Needs connectivity to ZPA infrastructure for zero-trust network access
 -   **Branch Connectors**: Require access to Zscaler cloud infrastructure
+-   **ZIA Application Connector Tunnel 2.0**: Requires IP ranges for secure VPN tunnels to Zscaler Internet Access
 
 Manually maintaining these IP lists is challenging because:
 
@@ -33,7 +34,7 @@ Manually maintaining these IP lists is challenging because:
 This tool provides:
 
 1. **Automated downloading** of current IP ranges from official Zscaler configuration endpoints
-2. **Multi-source consolidation** combining Hub IPs, Cloud Enforcement Nodes, and ZPA Allow Lists
+2. **Multi-source consolidation** combining Hub IPs, Cloud Enforcement Nodes, ZPA Allow Lists, and ZIA Application Connector Tunnel IPs
 3. **Subnet optimization** merging overlapping IP ranges for efficient firewall rules
 4. **Domain-specific configuration** supporting all Zscaler cloud environments
 5. **DigiCert integration** including certificate validation IPs
@@ -58,13 +59,19 @@ This tool provides:
 └─────────────────────┘     │  4. Add DigiCert    │
                             │  5. Consolidate     │
 ┌─────────────────────┐     │     subnets         │
+│ ZIA App Connector   │────▶│                     │
+│ Tunnel 2.0 (SVPN)   │     │                     │
+└─────────────────────┘     │                     │
+                            │                     │
+┌─────────────────────┐     │                     │
 │ digicert-subnets    │────▶│                     │
 │      .txt           │     └──────────┬──────────┘
 └─────────────────────┘                │
                                        ▼
                             ┌─────────────────────┐
-                            │ zpa_bc_subnet_      │
-                            │ consolidate.txt     │
+                            │ YYYY-MM-DD_domain_  │
+                            │ subnet_consolidate  │
+                            │ .txt                │
                             │ (Optimized list)    │
                             └─────────────────────┘
 ```
@@ -95,16 +102,22 @@ pip install requests pyyaml
 
 ### Interactive Mode (Recommended)
 
-Run the script without arguments to select your Zscaler domain interactively:
+Run the script without arguments for an interactive experience:
 
 ```bash
 python download_ip_ranges.py
 ```
 
-The script will present a menu:
+The script will guide you through the selection process:
 
 ```
-Select Zscaler domain:
+What do you want to download?
+1. ZIA only (Zscaler Internet Access)
+2. ZIA + ZPA (Zscaler Internet Access + Private Access)
+
+Enter number (1-2): 2
+
+Select ZIA cloud:
 1. zscaler.net
 2. zscalerbeta.net
 3. zscalerone.net
@@ -113,27 +126,70 @@ Select Zscaler domain:
 6. zscloud.net
 
 Enter number (1-6): 1
+
+Select ZPA cloud:
+1. private.zscaler.com
+2. zpabeta.net
+3. zpatwo.net
+
+Enter number (1-3): 1
 ```
 
 ### Command Line Mode
 
-Specify the domain directly:
+#### ZIA Only
+
+Download only ZIA IP ranges:
 
 ```bash
-python download_ip_ranges.py --domain zscaler.net
+python download_ip_ranges.py --zia-domain zscaler.net
+```
+
+#### ZIA + ZPA
+
+Download both ZIA and ZPA IP ranges:
+
+```bash
+python download_ip_ranges.py --zia-domain zscaler.net --zpa-domain private.zscaler.com --include-zpa
+```
+
+Or simply:
+
+```bash
+python download_ip_ranges.py --zia-domain zscaler.net --zpa-domain private.zscaler.com
 ```
 
 ### Custom Output File
 
+By default, the output file is automatically named:
+- **ZIA only**: `YYYY-MM-DD_zia-domain_subnet_consolidate.txt` (e.g., `2025-10-28_zscaler_subnet_consolidate.txt`)
+- **ZIA + ZPA**: `YYYY-MM-DD_zia-domain_zpa-domain_subnet_consolidate.txt` (e.g., `2025-10-28_zscaler_private-zscaler_subnet_consolidate.txt`)
+
+You can override this:
+
 ```bash
-python download_ip_ranges.py --domain zscloud.net --output my_whitelist.txt
+python download_ip_ranges.py --zia-domain zscloud.net --output my_whitelist.txt
 ```
 
 ### Example Output
 
+#### ZIA Only
+
 ```
 Loading sources from sources.yaml...
-Using domain: zscaler.net
+
+What do you want to download?
+1. ZIA only (Zscaler Internet Access)
+2. ZIA + ZPA (Zscaler Internet Access + Private Access)
+
+Enter number (1-2): 1
+
+Select ZIA cloud:
+1. zscaler.net
+...
+Enter number (1-6): 1
+
+Using ZIA cloud: zscaler.net
 
 Downloading ZscalerHubIPAddresses from https://config.zscaler.com/api/zscaler.net/hubs/cidr/json/recommended...
 Found 127 IP ranges
@@ -141,20 +197,51 @@ Found 127 IP ranges
 Downloading CloudEnforcementNodeRanges from https://config.zscaler.com/api/zscaler.net/future/json...
 Found 89 IP ranges
 
+Downloading ZIA Application Connector Tunnel IPs from https://config.zscaler.com/api/zscaler.net/svpn/json...
+Found 67 IP ranges
+
+Reading DigiCert subnets...
+Found 101 DigiCert subnets
+
+Total IP ranges collected: 384
+Unique IP ranges: 320
+
+Consolidating overlapping networks...
+Consolidated to 198 networks
+
+Results saved to: 2025-10-28_zscaler_subnet_consolidate.txt
+Generated on: 2025-10-28 10:30:45
+```
+
+#### ZIA + ZPA
+
+```
+Using ZIA cloud: zscaler.net
+Using ZPA cloud: private.zscaler.com
+
+Downloading ZscalerHubIPAddresses from https://config.zscaler.com/api/zscaler.net/hubs/cidr/json/recommended...
+Found 127 IP ranges
+
+Downloading CloudEnforcementNodeRanges from https://config.zscaler.com/api/zscaler.net/future/json...
+Found 89 IP ranges
+
+Downloading ZIA Application Connector Tunnel IPs from https://config.zscaler.com/api/zscaler.net/svpn/json...
+Found 67 IP ranges
+
 Downloading ZPAAllowList from https://config.zscaler.com/api/private.zscaler.com/zpa/json...
 Found 45 IP ranges
 
 Reading DigiCert subnets...
 Found 101 DigiCert subnets
 
-Total IP ranges collected: 362
-Unique IP ranges: 298
+Total IP ranges collected: 429
+Unique IP ranges: 356
 
 Consolidating overlapping networks...
-Consolidated to 187 networks
+Consolidated to 215 networks
 
-Results saved to: zpa_bc_subnet_consolidate.txt
-Generated on: 2025-01-15 10:30:45
+Results saved to: 2025-10-28_zscaler_private-zscaler_subnet_consolidate.txt
+Generated on: 2025-10-28 10:30:45
 ```
 
 ## Configuration
@@ -174,7 +261,15 @@ CloudEnforcementNodeRanges:
     zscloud.net: https://config.zscloud.net/future/json
     # ... other domains
 
-ZPAAllowList: https://config.zscaler.com/api/private.zscaler.com/zpa/json
+ZPAAllowList:
+    private.zscaler.com: https://config.zscaler.com/api/private.zscaler.com/zpa/json
+    zpatwo.net: https://config.zscaler.com/api/zpatwo.net/zpa/json
+    zpabeta.net: https://config.zscaler.com/api/zpabeta.net/zpa/json
+
+ZIAApplicationConnectorTunnel:
+    zscaler.net: https://config.zscaler.com/api/zscaler.net/svpn/json
+    zscloud.net: https://config.zscloud.net/svpn/json
+    # ... other domains
 ```
 
 ### digicert-subnets.txt
@@ -189,15 +284,28 @@ The tool retrieves data from these Zscaler configuration endpoints:
 
     - Format: `https://config.{domain}/api/{domain}/hubs/cidr/json/recommended`
     - Contains: Zscaler data center IP ranges for ZCC connectivity
+    - JSON structure: `{"hubPrefixes": ["ip1/mask", "ip2/mask", ...]}`
 
 2. **Cloud Enforcement Node Ranges**:
 
     - Format: `https://config.{domain}/api/{domain}/future/json`
     - Contains: IP ranges for cloud security enforcement
+    - JSON structure: `{"prefixes": ["ip1/mask", "ip2/mask", ...]}`
 
-3. **ZPA Allow List**:
-    - URL: `https://config.zscaler.com/api/private.zscaler.com/zpa/json`
+3. **ZPA Allow List** (Optional - only downloaded if ZPA is selected):
+
+    - Format: `https://config.zscaler.com/api/{zpa-domain}/zpa/json`
+    - Available domains: `private.zscaler.com`, `zpatwo.net`, `zpabeta.net`
     - Contains: IP ranges required for ZPA connectivity
+    - JSON structure: `{"content": [{"IPs": ["ip1/mask", ...]}, ...]}`
+
+4. **ZIA Application Connector Tunnel 2.0**:
+    - Format: `https://config.{domain}/api/{domain}/svpn/json`
+    - Contains: IP addresses for Zscaler Internet Access Application Connector Tunnel 2.0 (SVPN)
+    - Purpose: Required for establishing secure VPN tunnels between on-premises networks and ZIA
+    - JSON structure: `{"cloudName": "domain", "svpnIPs": ["ip1", "ip2", ...]}`
+    - Note: These IPs are returned as single addresses (automatically converted to /32 CIDR notation)
+    - Use case: Essential for Branch Connector and Cloud Connector deployments
 
 ## Output Format
 
@@ -231,7 +339,7 @@ Use the consolidated list to configure outbound firewall rules:
 # Example for iptables
 while read subnet; do
     iptables -A OUTPUT -d "$subnet" -j ACCEPT
-done < zpa_bc_subnet_consolidate.txt
+done < 2025-10-28_zscaler_subnet_consolidate.txt
 ```
 
 ### Network Security Groups (Cloud)
